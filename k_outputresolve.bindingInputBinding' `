@@ -1,0 +1,93 @@
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m1[m[36m-[mimport json
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m2[m[36m-[mfrom typing import Any, Literal
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m3[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m4[m[36m-[mfrom pydantic import BaseModel, ConfigDict, Field, model_validator
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m5[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m6[m[36m-[mfrom app.tools.contracts import ToolDefinition
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m7[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m8[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m9[m[36m-[mdef _reject_unsafe(value: Any, path: str = "context") -> None:
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m10[m[36m-[m    if isinstance(value, bytes): raise ValueError(f"Raw bytes are forbidden in {path}")
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m11[m[36m-[m    if isinstance(value, dict):
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m12[m[36m-[m        for key, item in value.items():
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m13[m[36m-[m            if str(key).lower() in {"raw_bytes","file_bytes","raw_path","path"}: raise ValueError(f"Raw data/path field is forbidden: {key}")
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m14[m[36m-[m            _reject_unsafe(item, f"{path}.{key}")
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m15[m[36m-[m    elif isinstance(value, list):
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m16[m[36m-[m        for index, item in enumerate(value): _reject_unsafe(item, f"{path}[{index}]")
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m17[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m18[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m19[m[36m-[mclass WorkflowSynthesis(BaseModel):
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m20[m[36m-[m    summary: str = Field(min_length=1, max_length=2000)
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m21[m[36m-[m    important_findings: list[str] = Field(default_factory=list, max_length=20)
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m22[m[36m-[m    data_quality_notes: list[str] = Field(default_factory=list, max_length=20)
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m23[m[36m-[m    decision_provenance: dict[str, Any] = Field(default_factory=dict)
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m24[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m25[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m:[m[32m26[m[36m:[m[1;31mclass AIStructuredInput[m(BaseModel):
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m27[m[36m-[m    objective: str = Field(min_length=1, max_length=4000)
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m28[m[36m-[m    response_language: Literal["ar", "en"] = "en"
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m29[m[36m-[m    context: dict[str, Any]
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m30[m[36m-[m    metadata: dict[str, Any] = Field(default_factory=dict)
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m31[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m32[m[36m-[m    @model_validator(mode="after")
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m33[m[36m-[m    def safe_bounded_context(self):
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m34[m[36m-[m        _reject_unsafe(self.context); _reject_unsafe(self.metadata, "metadata")
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m35[m[36m-[m        if len(json.dumps({"context":self.context,"metadata":self.metadata},ensure_ascii=False,default=str)) > 200_000: raise ValueError("Structured AI context exceeds the configured limit")
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m36[m[36m-[m        return self
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m37[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m38[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m39[m[36m-[mclass AIStructuredOutput(BaseModel):
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m40[m[36m-[m    model_config = ConfigDict(extra="allow")
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m41[m[36m-[m    schema_version: Literal["1.0"]
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m42[m[36m-[m    execution_kind: Literal["real","mock"]
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m43[m[36m-[m    provider_id: str
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m44[m[36m-[m    provider_version: str
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m45[m[36m-[m    model: str
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m46[m[36m-[m    runtime: str | None = None
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m47[m[36m-[m    prompt_id: str
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m48[m[36m-[m    prompt_version: str
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m49[m[36m-[m    analysis: WorkflowSynthesis
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m50[m[36m-[m    warnings: list[str] = Field(default_factory=list)
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m51[m[36m-[m    limitations: list[str] = Field(default_factory=list)
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m52[m[36m-[m    model_provenance: dict[str, Any]
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m53[m[36m-[m    artifacts: list[dict[str, Any]] = Field(default_factory=list)
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m54[m[36m-[m    mock: bool
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m55[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m56[m[36m-[m    @model_validator(mode="after")
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m57[m[36m-[m    def consistent_execution(self):
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m58[m[36m-[m        if self.mock != (self.execution_kind == "mock"): raise ValueError("mock must agree with execution_kind")
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m59[m[36m-[m        return self
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m60[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m-[m[32m61[m[36m-[m
+[35mbackend/app/tools/ai_contracts.py[m[36m:[m[32m62[m[36m:[mTOOL = ToolDefinition("ai.generate_structured","1.0.0","Generate a validated structured synthesis from bounded upstream task results","ai",("ai.structured-generation",),[1;31mAIStructuredInput[m,AIStructuredOutput,"low","local",True)
+[36m--[m
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m1[m[36m-[mfrom typing import Any
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m2[m[36m-[m
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m3[m[36m-[mfrom app.core.config import get_settings
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m4[m[36m-[mfrom app.db.session import SessionLocal
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m5[m[36m-[mfrom app.llm.base import LLMProviderError
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m6[m[36m-[mfrom app.llm.provider_factory import select_provider
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m7[m[36m-[mfrom app.models import Setting
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m8[m[36m-[mfrom app.schemas.contracts import ExecutionKind
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m:[m[32m9[m[36m:[mfrom app.tools.ai_contracts import TOOL, [1;31mAIStructuredInput[m, AIStructuredOutput, WorkflowSynthesis
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m10[m[36m-[mfrom app.tools.contracts import ProviderDefinition, ToolExecutionContext, ToolExecutionFailure
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m11[m[36m-[m
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m12[m[36m-[m
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m13[m[36m-[mclass RealAIStructuredHandler:
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m14[m[36m-[m    async def execute(self, context: ToolExecutionContext, arguments: dict[str, Any]) -> dict[str, Any]:
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m:[m[32m15[m[36m:[m        validated = [1;31mAIStructuredInput[m.model_validate(arguments); db = SessionLocal()
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m16[m[36m-[m        try:
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m17[m[36m-[m            base = get_settings(); names = ("llm_provider","native_model_id","ollama_model","llm_fallback_policy","runtime_fallback_policy")
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m18[m[36m-[m            values = {name:(db.get(Setting,name).value if db.get(Setting,name) else getattr(base,name)) for name in names}
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m19[m[36m-[m            if values["llm_provider"] == "fake": raise ToolExecutionFailure("PROVIDER_UNAVAILABLE","Fake AI is allowed only through explicit mock tool provider selection")
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m20[m[36m-[m            provider = select_provider(values["llm_provider"],base.offline_mode,base.model_copy(update=values))
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m21[m[36m-[m            result = await provider.generate_structured("workflow_synthesis_v1",validated.model_dump(mode="json"),WorkflowSynthesis)
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m22[m[36m-[m            provenance = getattr(result,"decision_provenance",None) or {}
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m23[m[36m-[m            if provenance.get("execution_kind") != "real": raise ToolExecutionFailure("PROVIDER_UNAVAILABLE","Real AI provider returned a non-real result")
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m24[m[36m-[m            return AIStructuredOutput(schema_version="1.0",execution_kind="real",provider_id=provenance.get("provider_id",provider.provider_id),provider_version=provenance.get("provider_version",provider.provider_version),model=str(provenance.get("model") or "unknown"),runtime=provenance.get("runtime"),prompt_id=provenance.get("prompt_id","workflow_synthesis_v1"),prompt_version=provenance.get("prompt_version","1.0.0"),analysis=result,warnings=list(provenance.get("warnings",[])),limitations=["Synthesis is limited to supplied structured context; raw assets are unavailable to the model."],model_provenance=provenance,mock=False).model_dump(mode="json")
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m25[m[36m-[m        except ToolExecutionFailure: raise
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m26[m[36m-[m        except LLMProviderError as exc: raise ToolExecutionFailure(exc.code,str(exc),retryable=exc.retryable,details=exc.details) from exc
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m27[m[36m-[m        finally: db.close()
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m28[m[36m-[m
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m29[m[36m-[m
+[35mbackend/app/tools/plugins/real_ai/__init__.py[m[36m-[m[32m30[m[36m-[mPROVIDER = ProviderDefinition("llm-structured-provider",TOOL.tool_id,"1.0.0",ExecutionKind.REAL,RealAIStructuredHandler(),True,"healthy",True)
